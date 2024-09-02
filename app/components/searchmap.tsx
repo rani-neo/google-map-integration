@@ -25,6 +25,7 @@ function RestaurantSearch() {
 
   async function handleSearch() {
     const results: Restaurant[] = await fetchRestaurants(location);
+    console.log(results);
     setRestaurants(results);
   }
 
