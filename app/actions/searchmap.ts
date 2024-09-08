@@ -1,105 +1,78 @@
-'use server'
+'use server';
 
 const GOOGLE_MAP_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAP_KEY;
 
-
-export interface PlacePrediction {
-    placePrediction?: {
-      place: string;
-      placeId: string;
-      text: {
-        text: string;
-        matches: { endOffset: number }[];
-      };
-      structuredFormat?: {
-        mainText: {
-          text: string;
-          matches: { endOffset: number }[];
-        };
-        secondaryText: {
-          text: string;
-        };
-      };
-      types?: string[];
-      distanceMeters?: number;
+// Interface for Nearby Search results
+export interface PlaceResult {
+  place_id: string;
+  name: string;
+  vicinity: string;
+  geometry: {
+    location: {
+      lat: number;
+      lng: number;
     };
-  }
-  
-  interface QueryPrediction {
-    queryPrediction?: {
-      text: {
-        text: string;
-        matches: { endOffset: number }[];
-      };
-    };
-  }
-  
-export  type AutocompleteResult = PlacePrediction | QueryPrediction;
+  };
+  distance: number; // Distance from the user's location
+}
 
+// Haversine formula to calculate the distance between two lat/lon points
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371; // Radius of the Earth in kilometers
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distance = R * c; // Distance in kilometers
+  return distance;
+};
 
-  
-  
-
-export async function fetchRestaurants(location: string) {
+export async function fetchNearbyRestaurants(query: string, userLocation: string): Promise<PlaceResult[]> {
   if (!GOOGLE_MAP_KEY) {
     throw new Error('Google Maps API key is missing');
   }
 
-  console.log(location);
-  
-  const response = await fetch(`https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location}&radius=1500&type=restaurant&key=${GOOGLE_MAP_KEY}`, {
+  const [userLat, userLon] = userLocation.split(',').map(Number); // Extract user's latitude and longitude
+  console.log('User Location:', userLat, userLon);
+  console.log('Query:', query);
+
+  // Use Nearby Search API
+  const endpoint = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?keyword=${query}&location=${userLocation}&radius=1500&type=restaurant&key=${GOOGLE_MAP_KEY}`;
+
+  const response = await fetch(endpoint, {
     method: 'GET',
-    next: { revalidate: 60 },  // Revalidate the response every 60 seconds
+    headers: {
+      'Content-Type': 'application/json',
+    },
   });
-  
+
   if (!response.ok) {
-    throw new Error(`Failed to fetch: ${response.statusText}`);
+    throw new Error(`Failed to fetch nearby restaurants: ${response.statusText}`);
   }
 
   const data = await response.json();
-  console.log(data);
-  return data.results;
-}
+  console.log('Nearby Search Results:', data);
 
-export async function fetchRestaurantAutocomplete(query: string, city: string, state: string, postcode: string): Promise<AutocompleteResult[]> {
-    if (!GOOGLE_MAP_KEY) {
-      throw new Error('Google Maps API key is missing');
-    }
-  
-    const requestBody = {
-      input: query,
-      locationBias: {
-        rectangle: {
-          low: {
-            latitude: -43.00311,  // Southernmost point of Australia
-            longitude: 113.6594,  // Westernmost point of Australia
+  // Filter results by name starting with the query and sort by distance
+  return data.results
+    .filter((result: any) => result.name.toLowerCase().startsWith(query.toLowerCase())) // Filter results based on name starting with the query
+    .map((result: any) => {
+      const distance = calculateDistance(userLat, userLon, result.geometry.location.lat, result.geometry.location.lng);
+      return {
+        place_id: result.place_id,
+        name: result.name,
+        vicinity: result.vicinity,
+        geometry: {
+          location: {
+            lat: result.geometry.location.lat,
+            lng: result.geometry.location.lng,
           },
-          high: {
-            latitude: -10.0,     // Northernmost point of Australia
-            longitude: 153.61194, // Easternmost point of Australia
-          }
-        }
-      },
-      includedRegionCodes: ['au'],
-    };
-  
-    const response = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': GOOGLE_MAP_KEY,
-      },
-      body: JSON.stringify(requestBody),
-      cache: 'no-store',  // Disable caching for this request
-    });
-  
-    if (!response.ok) {
-        console.error(response);
-      throw new Error(`Failed to fetch autocomplete: ${response.statusText}`);
-    }
-  
-    const data = await response.json();
-    console.log(data);
-    return data.suggestions as AutocompleteResult[];
-  }
-  
+        },
+        distance, // Add distance in kilometers
+      };
+    })
+    .sort((a: { distance: number; }, b: { distance: number; }) => a.distance - b.distance); // Sort results by distance (ascending)
+}
