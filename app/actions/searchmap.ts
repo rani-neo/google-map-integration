@@ -2,8 +2,8 @@
 
 const GOOGLE_MAP_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAP_KEY;
 
-// Interface for Nearby Search results
-export interface PlaceResult {
+// Interface for Nearby Search results, directly used as VenueOption
+export interface VenueOption {
   place_id: string;
   name: string;
   vicinity: string;
@@ -30,7 +30,8 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
   return distance;
 };
 
-export async function fetchNearbyRestaurants(query: string, userLocation: string): Promise<PlaceResult[]> {
+// Fetch restaurants and return them as VenueOption directly
+export async function fetchNearbyRestaurants(query: string, userLocation: string): Promise<VenueOption[]> {
   if (!GOOGLE_MAP_KEY) {
     throw new Error('Google Maps API key is missing');
   }
@@ -56,7 +57,7 @@ export async function fetchNearbyRestaurants(query: string, userLocation: string
   const data = await response.json();
   console.log('Nearby Search Results:', data);
 
-  // Filter results by name starting with the query and sort by distance
+  // Filter and map the response to include only results that start with the query, and sort by distance
   return data.results
     .filter((result: any) => result.name.toLowerCase().startsWith(query.toLowerCase())) // Filter results based on name starting with the query
     .map((result: any) => {
