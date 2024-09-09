@@ -1,7 +1,4 @@
-'use client';
-
-import React, { useEffect, useState } from 'react';
-
+import { useEffect } from 'react';
 const GOOGLE_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAP_KEY;
 
 function loadGoogleMapsScript(callback: () => void) {
@@ -19,56 +16,29 @@ function loadGoogleMapsScript(callback: () => void) {
   }
 }
 
-function GoogleMap({
-  initialLat,
-  initialLng,
-  setCurrentLocation,
-}: {
-  initialLat: number;
-  initialLng: number;
-  setCurrentLocation: (location: { lat: number; lng: number }) => void;
-}) {
-  const [currentLocation, setCurrentMapLocation] = useState({ lat: initialLat, lng: initialLng });
-
-  useEffect(() => {
-    loadGoogleMapsScript(() => {
-      if (typeof google !== 'undefined' && google.maps) {
+function GoogleMap({ lat, lng }: { lat: number, lng: number }) {
+  useEffect(function () {
+    loadGoogleMapsScript(function () {
+      var coordinates = { lat: lat, lng: lng };
+      console.log("Coordinates:", coordinates);
+      if (typeof google !== 'undefined') {
         const map = new google.maps.Map(document.getElementById('map') as HTMLElement, {
-          center: currentLocation,
+          center: coordinates,
           zoom: 15,
         });
 
-        // Add marker for the initial position
-        let marker = new google.maps.Marker({
-          position: currentLocation,
-          map,
+        new google.maps.Marker({
+          position: coordinates,
+          map
         });
 
-        // If the user grants permission for their current location
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            (position) => {
-              const userLat = position.coords.latitude;
-              const userLng = position.coords.longitude;
-
-              // Update both the internal map location and the passed-in location handler
-              setCurrentMapLocation({ lat: userLat, lng: userLng });
-              setCurrentLocation({ lat: userLat, lng: userLng });
-
-              // Recenter the map and place a new marker at the user's location
-              map.setCenter({ lat: userLat, lng: userLng });
-              marker.setPosition({ lat: userLat, lng: userLng });
-            },
-            (error) => {
-              console.error('Error fetching location', error);
-            }
-          );
-        }
-      } else {
-        console.error('Google Maps failed to load.');
+        // new google.maps.marker.AdvancedMarkerElement({
+        //   map,
+        //   position: coordinates,
+        // });
       }
     });
-  }, [currentLocation, setCurrentLocation]); // Re-render the map when the location changes
+  }, [lat, lng]);
 
   return <div id="map" style={{ height: '500px', width: '100%' }}></div>;
 }
